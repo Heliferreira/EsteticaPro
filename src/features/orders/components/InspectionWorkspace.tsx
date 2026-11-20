@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useTransition } from 'react';
 import { VistoriaViewer } from '@/features/orders/components/VistoriaViewer';
+import { useOrderMarks } from '@/features/orders/components/OrderLive';
 import { MARK_STATUS } from '@/lib/car3d/marks';
 import { BRL } from '@/lib/actions';
 import { removeMark, saveMark } from '@/features/orders/actions';
@@ -15,7 +16,6 @@ interface Props {
   osId: string;
   bodyType: BodyType;
   paint: string;
-  initialMarks: MarkRow[];
   services: ServiceOpt[];
   itemsTotal: number;
   /** partes cobertas por PPF (pintadas em turquesa no 3D) */
@@ -28,8 +28,9 @@ interface Draft { status: MarkStatus; service_id: string; price: string; note: s
 const fmtInput = (n: number) => (n ? String(n).replace('.', ',') : '');
 const toNumber = (s: string) => Number(s.replace(/\./g, '').replace(',', '.')) || 0;
 
-export function InspectionWorkspace({ osId, bodyType, paint, initialMarks, services, itemsTotal, ppfParts, readOnly }: Props) {
-  const [marks, setMarks] = useState<Record<string, MarkRow>>(() => Object.fromEntries(initialMarks.map((m) => [m.part_id, m])));
+export function InspectionWorkspace({ osId, bodyType, paint, services, itemsTotal, ppfParts, readOnly }: Props) {
+  // As marcações ficam no <OrderLive> para o resumo no fim da OS acompanhar ao vivo.
+  const { marks, setMarks } = useOrderMarks();
   const [names, setNames] = useState<Record<string, string>>({});
   const [selected, setSelected] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft>({ status: 'ok', service_id: '', price: '', note: '' });

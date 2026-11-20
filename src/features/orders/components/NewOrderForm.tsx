@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { useFormState } from 'react-dom';
 import { Field, FormError, SubmitButton } from '@/components/ui/form';
 import { Collapsible } from '@/components/ui/Collapsible';
+import { QuickSeller } from '@/features/partners/components/QuickSeller';
 import { BODY_TYPE_ORDER, bodyTypeLabel } from '@/lib/car3d/specs';
 import { PAINT_PRESETS } from '@/lib/car3d/marks';
 import { createOrder } from '../actions';
@@ -37,6 +38,11 @@ export function NewOrderForm({ customers, vehicles, employees, defaultCustomerId
   const [customerId, setCustomerId] = useState(defaultCustomerId ?? '');
   const [vehicleModeRaw, setVehicleMode] = useState<Mode | null>(null);
   const [partnerId, setPartnerId] = useState('');
+  const [sellerId, setSellerId] = useState('');
+  // Vendedores cadastrados aqui mesmo, durante o preenchimento da OS.
+  const [created, setCreated] = useState<Array<{ id: string; partner_id: string; name: string }>>([]);
+  const allSellers = [...sellers, ...created.filter((c) => !sellers.some((s) => s.id === c.id))];
+  const partnerSellers = allSellers.filter((s) => s.partner_id === partnerId);
 
   const options = vehicles.filter((v) => v.customer_id === customerId);
   // Cliente novo (ou cliente sem veículos) → cadastra o veículo aqui mesmo.
@@ -140,18 +146,26 @@ export function NewOrderForm({ customers, vehicles, employees, defaultCustomerId
           <Collapsible variant="inset" title="Parceiro e vendedor (opcional)">
             <div className="grid gap-4 md:grid-cols-2">
               <Field label="Parceiro" name="partner_id" state={state}>
-                <select id="partner_id" name="partner_id" className="input" value={partnerId} onChange={(e) => setPartnerId(e.target.value)}>
+                <select id="partner_id" name="partner_id" className="input" value={partnerId}
+                        onChange={(e) => { setPartnerId(e.target.value); setSellerId(''); }}>
                   <option value="">Venda direta (sem parceiro)</option>
                   {partners.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </select>
               </Field>
               <Field label="Vendedor do parceiro" name="seller_id" state={state}>
-                <select id="seller_id" name="seller_id" className="input" key={partnerId} defaultValue="">
+                <select id="seller_id" name="seller_id" className="input" value={sellerId} onChange={(e) => setSellerId(e.target.value)}>
                   <option value="">Sem vendedor</option>
-                  {sellers.filter((s) => s.partner_id === partnerId).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  {partnerSellers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>
               </Field>
             </div>
+            {partnerId && (
+              <div className="space-y-2">
+                {partnerSellers.length === 0 && <p className="muted text-xs">Este parceiro ainda não tem vendedores.</p>}
+                <QuickSeller key={partnerId} partnerId={partnerId}
+                             onCreated={(sl) => { setCreated((c) => [...c, sl]); setSellerId(sl.id); }} />
+              </div>
+            )}
           </Collapsible>
         )}
         <Field label="Observações" name="notes" state={state}>

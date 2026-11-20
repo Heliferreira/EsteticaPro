@@ -5,7 +5,8 @@ import { PageHeader, ErrorBanner, Empty } from '@/components/ui/page';
 import { ReportActions } from '@/features/reports/components/ReportActions';
 import { ReportDownload } from '@/features/reports/components/ReportDownload';
 import { ReopenButton } from '@/features/reports/components/ReopenButton';
-import { describeServices, money, periodLabel, personTotals } from '@/features/reports/format';
+import { money, periodLabel, personTotals, reportSummary, sellerSource, serviceLines } from '@/features/reports/format';
+import { loadReportGaps } from '@/features/reports/gaps';
 import { PRESETS, brDate, isYmd, presetRange, todayYmd, type Preset } from '@/features/reports/period';
 import { fmtDate } from '@/lib/actions';
 import type { CommissionReport, Partner, ReportData } from '@/types/db';
@@ -52,6 +53,8 @@ export default async function ReportsPage({ searchParams }: { searchParams: Para
     if (error) loadError = error.message; else data = r as ReportData;
   }
   const pending = data ? data.rows.filter((r) => !r.frozen).length : 0;
+  const gaps = data ? await loadReportGaps(supabase, partner.id, from, to) : null;
+  const sum = data ? reportSummary(data) : null;
   const href = (o: Partial<Params>) => {
     const q = new URLSearchParams({ parceiro: partner.id, periodo: preset, ...(preset === 'custom' ? { de: from, ate: to } : {}), ...o } as Record<string, string>);
     return `/relatorios?${q.toString()}`;
@@ -102,11 +105,22 @@ export default async function ReportsPage({ searchParams }: { searchParams: Para
                 <h2 className="text-lg font-semibold">{data.partner}</h2>
                 <p className="muted text-sm">{periodLabel(data)} · {data.totals.orders} OS concluídas · data considerada: conclusão da OS</p>
               </div>
-              <div className="text-right">
-                <p className="muted text-xs">Total a repassar à estética</p>
-                <p className="font-display text-3xl font-bold">{money(Number(data.totals.charged))}</p>
-              </div>
             </div>
+            {sum && (
+              <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                {[
+                  { label: 'Total cobrado', value: sum.charged, strong: false },
+                  { label: `Parceiro recebe (${data.partner})`, value: sum.partner, strong: false },
+                  { label: 'Vendedores recebem', value: sum.sellers, strong: false },
+                  { label: 'Estética fica', value: sum.net, strong: true },
+                ].map((c) => (
+                  <div key={c.label} className="rounded-2xl px-4 py-3" style={{ background: 'var(--surface-2)' }}>
+                    <p className="muted text-xs">{c.label}</p>
+                    <p className={`font-display font-bold ${c.strong ? 'text-3xl' : 'text-2xl'}`}>{money(c.value)}</p>
+                  </div>
+                ))}
+              </div>
+            )}
             {data.rows.length === 0 ? (
               <p className="muted text-sm">Nenhuma OS concluída deste parceiro no período.</p>
             ) : (
@@ -114,7 +128,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Para
                 <div className="overflow-x-auto rounded-2xl" style={{ background: 'var(--surface-2)' }}>
                   <table className="w-full min-w-[860px]">
                     <thead><tr>
-                      {['OS', 'Data', 'Veículo', 'Serviços', 'Cobrado', 'Com. parceiro', 'Vendedor', 'Com. vendedor', 'Líquido'].map((h) => <th key={h} className="th">{h}</th>)}
+                      {['OS', 'Data', 'Veículo', 'Serviços e valores', 'Cobrado', 'Parceiro recebe', 'Vendedor', 'Vendedor recebe', 'Estética fica'].map((h) => <th key={h} className="th">{h}</th>)}
                     </tr></thead>
                     <tbody>
                       {data.rows.map((r) => (
@@ -122,10 +136,24 @@ export default async function ReportsPage({ searchParams }: { searchParams: Para
                           <td className="td"><Link className="underline" href={`/os/${r.order_id}`}>#{r.number}</Link>{r.frozen && <span className="badge ml-2">congelada</span>}</td>
                           <td className="td">{brDate(r.date)}</td>
                           <td className="td">{r.vehicle} · <span className="font-mono">{r.plate}</span></td>
-                          <td className="td max-w-[260px]">{describeServices(r)}</td>
+                          <td className="td min-w-[260px] max-w-[340px]">
+                            {serviceLines(r).length === 0 ? '—' : (
+                              <ul className="space-y-1">
+                                {serviceLines(r).map((l, i) => (
+                                  <li key={i} className="flex justify-between gap-3">
+                                    <span>{l.label}</span>
+                                    {l.price != null && <span className="muted shrink-0">{money(l.price)}</span>}
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                          </td>
                           <td className="td">{money(Number(r.charged))}</td>
                           <td className="td">{money(Number(r.partner_amount))}</td>
-                          <td className="td">{r.seller ?? '—'}</td>
+                          <td className="td">
+                            {r.seller ?? '—'}
+                            {r.seller && <span className="muted block text-xs">{sellerSource(r)}</span>}
+                          </td>
                           <td className="td">{money(Number(r.seller_amount))}</td>
                           <td className="td">{money(Number(r.net))}</td>
                         </tr>
@@ -154,6 +182,23 @@ export default async function ReportsPage({ searchParams }: { searchParams: Para
               </>
             )}
           </div>
+          {gaps && (gaps.direct.length > 0 || gaps.pending.length > 0) && (
+            <div className="card mt-4 space-y-1.5 text-sm">
+              <p className="font-semibold">OS que não entraram neste relatório</p>
+              {gaps.direct.length > 0 && (
+                <p className="muted">
+                  {gaps.direct.length} OS concluída{gaps.direct.length > 1 ? 's' : ''} no período sem parceiro (venda direta): {gaps.direct.map((n) => `#${n}`).join(', ')}.
+                  Se alguma era de {data.partner}, abra a OS e escolha o parceiro em Origem e comissões.
+                </p>
+              )}
+              {gaps.pending.length > 0 && (
+                <p className="muted">
+                  {gaps.pending.length} OS de {data.partner} ainda aberta{gaps.pending.length > 1 ? 's' : ''} ou em andamento: {gaps.pending.map((n) => `#${n}`).join(', ')}.
+                  Elas entram quando forem concluídas.
+                </p>
+              )}
+            </div>
+          )}
           {data.rows.length > 0 && <ReportActions partner={partner.id} from={from} to={to} pendingToFreeze={pending} />}
         </>
       )}

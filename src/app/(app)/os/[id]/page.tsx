@@ -9,7 +9,8 @@ import { updateOrder, addItem, removeItem } from '@/features/orders/actions';
 import { AddItemForm, OrderDetailsForm } from '@/features/orders/components/OrderForms';
 import { PpfCard } from '@/features/orders/components/PpfCard';
 import { ppfAllIds } from '@/lib/car3d/ppf';
-import { CommissionCard } from '@/features/commissions/components/CommissionCard';
+import { OrderLive } from '@/features/orders/components/OrderLive';
+import { OrderSummary } from '@/features/orders/components/OrderSummary';
 import type { Employee, OrderCommission, OsListRow, Partner, Seller, Service, Vehicle, WorkOrderItem, WorkOrderMark } from '@/types/db';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -68,7 +69,7 @@ export default async function OrderPage({ params }: { params: { id: string } }) 
   }));
 
   return (
-    <>
+    <OrderLive initialMarks={initialMarks}>
       <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="muted text-sm"><Link href="/os" className="underline">Ordens de serviço</Link> / #{order.number}</p>
@@ -86,16 +87,11 @@ export default async function OrderPage({ params }: { params: { id: string } }) 
       <OrderDetailsForm action={updateOrder.bind(null, order.id)} status={order.status}
                         employeeId={order.employee_id} notes={(notesQ.data?.notes as string | null) ?? null} employees={employees} />
 
-      {manage && (
-        <CommissionCard osId={order.id} osTotal={Number(order.total)} partners={partners} sellers={sellers}
-                        commission={commission} frozen={frozen} />
-      )}
-
       <h2 className="mb-2 mt-6 font-display text-xl font-bold">Vistoria 3D</h2>
       {frozen && <p className="muted mb-2 text-sm">OS congelada em relatório: serviços e valores estão travados.</p>}
       {readOnly && !frozen && <p className="muted mb-2 text-sm">Esta OS está {OS_STATUS_LABEL[order.status].toLowerCase()} — a vistoria está somente para consulta.</p>}
       <InspectionWorkspace osId={order.id} bodyType={vehicle.body_type} paint={vehicle.color_hex}
-                           initialMarks={initialMarks} services={regularServices} itemsTotal={itemsTotal} ppfParts={ppfCovered} readOnly={readOnly} />
+                           services={regularServices} itemsTotal={itemsTotal} ppfParts={ppfCovered} readOnly={readOnly} />
 
       <PpfCard osId={order.id} bodyType={vehicle.body_type} services={ppfServices} readOnly={readOnly} removeAction={removeItem}
                items={ppfItems.map((i) => ({ id: i.id, price: Number(i.price), ppf: i.ppf }))} />
@@ -123,6 +119,17 @@ export default async function OrderPage({ params }: { params: { id: string } }) 
         )}
         {!readOnly && <AddItemForm action={addItem.bind(null, order.id)} services={regularServices} />}
       </div>
-    </>
+
+      <OrderSummary osId={order.id} bodyType={vehicle.body_type} services={regularServices}
+                    items={items.map((i) => ({ id: i.id, description: i.description, price: Number(i.price), ppf: i.ppf }))}
+                    manage={manage} partners={partners} sellers={sellers} commission={commission} frozen={frozen} />
+          <h2 className="mb-2 mt-6 font-display text-xl font-bold">Ficha para o funcionário</h2>
+      <div className="card flex flex-wrap items-center justify-between gap-3">
+        <p className="muted max-w-xl text-sm">
+          PDF com o veículo e os serviços a executar, pronto para imprimir e deixar no carro. Não mostra nenhum valor.
+        </p>
+        <a href={`/os/${order.id}/pdf`} className="btn" download>Baixar OS em PDF</a>
+      </div>
+    </OrderLive>
   );
 }

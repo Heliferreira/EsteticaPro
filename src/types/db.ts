@@ -137,6 +137,7 @@ export interface ServiceProduct {
 
 // ---------------------------------------------------------------- parceiros, comissões e relatórios
 export type CommissionMode = 'pct' | 'val';
+export type SellerFrom = 'estetica' | 'parceiro';
 
 export interface Partner {
   id: string;
@@ -161,6 +162,8 @@ export interface OrderCommission {
   partner_value: number | null;
   seller_mode: CommissionMode;
   seller_value: number | null;
+  /** De quem sai a comissão do vendedor: da parte da estética ou da parte do parceiro. */
+  seller_from: SellerFrom;
   report_id: string | null;
 }
 
@@ -171,13 +174,20 @@ export interface ReportRow {
   vehicle: string;
   plate: string;
   body_type: BodyType;
-  marks: Array<{ part: string; service: string | null }>;
-  items: Array<{ description: string; service: string | null; ppf: PpfData | null }>;
+  // status e price só existem em relatórios gerados depois da migration 6 (os congelados antigos não têm).
+  marks: Array<{ part: string; service: string | null; status?: string; price?: number }>;
+  items: Array<{ description: string; service: string | null; ppf: PpfData | null; price?: number }>;
   charged: number;
+  /** Parte do parceiro (% sobre o total), antes de descontar o vendedor. Só nos relatórios novos. */
+  partner_share?: number;
+  /** O que o parceiro recebe de fato (já sem a comissão do vendedor, se for ele quem paga). */
   partner_amount: number;
   seller_id: string | null;
   seller: string | null;
   seller_amount: number;
+  /** De quem saiu a comissão do vendedor. Relatórios antigos não têm: valem como "estetica". */
+  seller_from?: SellerFrom;
+  /** O que fica com a estética. */
   net: number;
   frozen: boolean;
 }

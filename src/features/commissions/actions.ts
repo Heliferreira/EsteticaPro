@@ -27,10 +27,12 @@ export async function saveCommission(osId: string, _: FormState, fd: FormData): 
     partner_id: p.data.partner_id,
     seller_id: p.data.seller_id,
     charged: p.data.charged,
-    partner_mode: p.data.partner_mode,
+    // A comissão é sempre em %: o modo fica fixo e só o número vem do formulário.
+    partner_mode: 'pct',
     partner_value: p.data.partner_value,
-    seller_mode: p.data.seller_mode,
+    seller_mode: 'pct',
     seller_value: p.data.seller_value,
+    seller_from: p.data.seller_id ? p.data.seller_from : 'estetica',
   }, { onConflict: 'work_order_id' });
   if (error) {
     return { error: error.code === '23503' ? 'O vendedor escolhido não pertence a esse parceiro.' : friendlyError(error) };
